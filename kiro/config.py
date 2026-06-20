@@ -120,6 +120,11 @@ PROXY_API_KEY: str = os.getenv("PROXY_API_KEY", "my-super-secret-password-123")
 #   VPN_PROXY_URL=192.168.1.100:8080  (defaults to http://)
 VPN_PROXY_URL: str = os.getenv("VPN_PROXY_URL", "")
 
+# SSL legacy renegotiation support (Issue #187)
+# Some corporate proxies/VPNs require unsafe legacy SSL renegotiation.
+# Set to "true" to enable (less secure, but required for some network environments).
+SSL_UNSAFE_LEGACY_RENEGOTIATION: bool = os.getenv("SSL_UNSAFE_LEGACY_RENEGOTIATION", "false").lower() in ("true", "1", "yes")
+
 # ==================================================================================================
 # Kiro API Credentials
 # ==================================================================================================
