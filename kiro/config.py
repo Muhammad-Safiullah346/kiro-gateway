@@ -171,6 +171,24 @@ KIRO_CLI_DB_FILE: str = str(Path(_raw_cli_db_file)) if _raw_cli_db_file else ""
 SQLITE_READONLY: bool = os.getenv("SQLITE_READONLY", "false").lower() in ("true", "1", "yes")
 
 # ==================================================================================================
+# Token Write-Back (Kiro Hub integration)
+# ==================================================================================================
+
+# When a Kiro Desktop refresh token rotates, the gateway can POST the new token
+# back to a platform endpoint so it can be persisted durably (e.g. into the
+# host's env var on free-tier hosting that has no writable/persistent disk).
+# This avoids the "works once, then 401 on next cold start" failure mode.
+#
+# All three must be set to enable write-back; otherwise it is silently disabled
+# and the gateway behaves exactly as before.
+#   KIRO_TOKEN_WRITEBACK_URL        - platform callback endpoint (https)
+#   KIRO_TOKEN_WRITEBACK_GATEWAY_ID - this gateway's id on the platform
+#   KIRO_TOKEN_WRITEBACK_SECRET     - per-gateway shared secret for auth
+KIRO_TOKEN_WRITEBACK_URL: str = os.getenv("KIRO_TOKEN_WRITEBACK_URL", "")
+KIRO_TOKEN_WRITEBACK_GATEWAY_ID: str = os.getenv("KIRO_TOKEN_WRITEBACK_GATEWAY_ID", "")
+KIRO_TOKEN_WRITEBACK_SECRET: str = os.getenv("KIRO_TOKEN_WRITEBACK_SECRET", "")
+
+# ==================================================================================================
 # Kiro API URL Templates
 # ==================================================================================================
 

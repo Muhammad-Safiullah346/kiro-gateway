@@ -45,6 +45,9 @@ from kiro.config import (
     TOKEN_REFRESH_THRESHOLD,
     SQLITE_READONLY,
     SSL_UNSAFE_LEGACY_RENEGOTIATION,
+    KIRO_TOKEN_WRITEBACK_URL,
+    KIRO_TOKEN_WRITEBACK_GATEWAY_ID,
+    KIRO_TOKEN_WRITEBACK_SECRET,
     get_kiro_refresh_url,
     get_kiro_api_host,
     get_kiro_q_host,
@@ -743,13 +746,52 @@ class KiroAuthManager:
         )
         
         logger.info(f"Token refreshed via Kiro Desktop Auth, expires: {self._expires_at.isoformat()}")
-        
+
         # Save to file or SQLite depending on configuration
         if self._sqlite_db:
             self._save_credentials_to_sqlite()
         else:
             self._save_credentials_to_file()
-    
+
+        # Persist the rotated token back to the platform (Kiro Hub), if configured.
+        # Non-fatal: a write-back failure must never break the refresh itself.
+        if new_refresh_token:
+            await self._writeback_rotated_token(new_refresh_token)
+
+    async def _writeback_rotated_token(self, refresh_token: str) -> None:
+        """
+        POST the rotated refresh token back to the platform so it can be
+        persisted durably (e.g. into the host's env var on free-tier hosting
+        with no writable/persistent disk). Best-effort and fully non-fatal.
+
+        Enabled only when all three KIRO_TOKEN_WRITEBACK_* settings are present.
+        """
+        if not (
+            KIRO_TOKEN_WRITEBACK_URL
+            and KIRO_TOKEN_WRITEBACK_GATEWAY_ID
+            and KIRO_TOKEN_WRITEBACK_SECRET
+        ):
+            return
+
+        payload = {
+            "gatewayId": KIRO_TOKEN_WRITEBACK_GATEWAY_ID,
+            "secret": KIRO_TOKEN_WRITEBACK_SECRET,
+            "refreshToken": refresh_token,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(KIRO_TOKEN_WRITEBACK_URL, json=payload)
+            if resp.status_code == 200:
+                logger.info("Rotated token written back to platform successfully.")
+            else:
+                # Never log the token or secret; status only.
+                logger.warning(
+                    f"Token write-back returned HTTP {resp.status_code} "
+                    "(gateway still works this session; cold start may need re-auth)."
+                )
+        except Exception as e:
+            logger.warning(f"Token write-back failed (non-fatal): {type(e).__name__}")
+
     async def _refresh_token_aws_sso_oidc(self) -> None:
         """
         Refreshes token using AWS SSO OIDC endpoint.
