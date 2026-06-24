@@ -44,14 +44,20 @@ if [ -n "$SEED_DB" ] && [ -f "$SEED_DB" ]; then
 fi
 
 # Enterprise Kiro IDE (AWS SSO OIDC): place the device-registration file where
-# the gateway looks for it — ~/.aws/sso/cache/{clientIdHash}.json. The platform
-# names the seed file with the correct {clientIdHash}.json basename, so we just
-# preserve that name on copy.
+# the gateway looks for it — ~/.aws/sso/cache/{clientIdHash}.json.
+#
+# The target FILENAME comes from KIRO_DEVICE_REG_NAME (an env value), because a
+# clientIdHash is hex and often starts with a digit — which Render rejects as a
+# secret-file NAME. So the seed file itself has a safe fixed name, and the real
+# {clientIdHash}.json name rides this env var. Falls back to the seed's basename
+# for backward compatibility.
 DEVICE_REG_SEED="${KIRO_DEVICE_REG_SEED:-}"
 SSO_CACHE_DIR="/home/kiro/.aws/sso/cache"
 if [ -n "$DEVICE_REG_SEED" ] && [ -f "$DEVICE_REG_SEED" ]; then
     mkdir -p "$SSO_CACHE_DIR"
-    DEVICE_REG_TARGET="${SSO_CACHE_DIR}/$(basename "$DEVICE_REG_SEED")"
+    # basename() guards against path traversal in the provided name.
+    DEVICE_REG_NAME="$(basename "${KIRO_DEVICE_REG_NAME:-$(basename "$DEVICE_REG_SEED")}")"
+    DEVICE_REG_TARGET="${SSO_CACHE_DIR}/${DEVICE_REG_NAME}"
     cp "$DEVICE_REG_SEED" "$DEVICE_REG_TARGET"
     chmod 600 "$DEVICE_REG_TARGET"
     echo "[entrypoint] Placed Enterprise device-registration file at $DEVICE_REG_TARGET"
