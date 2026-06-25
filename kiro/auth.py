@@ -912,13 +912,20 @@ class KiroAuthManager:
         self._expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in - 60)
         
         logger.info(f"Token refreshed via AWS SSO OIDC, expires: {self._expires_at.isoformat()}")
-        
+
         # Save to file or SQLite depending on configuration
         if self._sqlite_db:
             self._save_credentials_to_sqlite()
         else:
             self._save_credentials_to_file()
-    
+
+        # Persist the rotated token back to the platform (Kiro Hub), if configured.
+        # Non-fatal. AWS SSO OIDC rotates the refresh token just like the Desktop
+        # path, so write-back is needed here too (Issue: Enterprise/SSO accounts
+        # were silently skipped because this call was only on the Desktop path).
+        if new_refresh_token:
+            await self._writeback_rotated_token(new_refresh_token)
+
     async def get_access_token(self) -> str:
         """
         Returns a valid access_token, refreshing it if necessary.
