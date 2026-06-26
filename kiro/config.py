@@ -212,8 +212,11 @@ KIRO_Q_HOST_TEMPLATE: str = "https://runtime.{region}.kiro.dev"
 # ==================================================================================================
 
 # Time before token expiration when refresh is needed (in seconds)
-# Default 10 minutes - refresh token in advance to avoid errors
-TOKEN_REFRESH_THRESHOLD: int = 600
+# Default 10 minutes - refresh token in advance to avoid errors.
+# Env-configurable: set TOKEN_REFRESH_THRESHOLD very high (e.g. larger than a
+# token's full lifetime) to force a refresh on the first request — useful for
+# verifying token write-back without waiting for natural near-expiry.
+TOKEN_REFRESH_THRESHOLD: int = int(os.getenv("TOKEN_REFRESH_THRESHOLD", "600"))
 
 # ==================================================================================================
 # Retry Configuration
