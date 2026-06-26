@@ -15,8 +15,7 @@
 #   - Place an Enterprise AWS SSO device-registration file (KIRO_DEVICE_REG_SEED)
 #     into ~/.aws/sso/cache/ where the gateway expects to find it by name.
 #   - Copy a read-only KIRO_CREDS_FILE (e.g. Render /etc/secrets) to a WRITABLE
-#     path so in-place token saves don't fail, and patch in a written-back
-#     REFRESH_TOKEN so a rotated token survives cold starts.
+#     path so in-place token saves don't fail.
 
 set -e
 
@@ -66,12 +65,10 @@ if [ -n "$DEVICE_REG_SEED" ] && [ -f "$DEVICE_REG_SEED" ]; then
     echo "[entrypoint] Placed Enterprise device-registration file at $DEVICE_REG_TARGET"
 fi
 
-# JSON creds durability: when KIRO_CREDS_FILE points at a read-only mount (e.g.
-# Render secret files at /etc/secrets), the gateway's in-place token save fails
-# ([Errno 30] Read-only file system) AND a cold start would re-read the original
-# (now-rotated) token. Fix: copy the creds JSON to a WRITABLE path, patch in the
-# written-back REFRESH_TOKEN (freshest token wins on cold start), and re-point
-# the gateway at the writable copy.
+# Read-only creds handling: when KIRO_CREDS_FILE points at a read-only mount
+# (e.g. Render secret files at /etc/secrets), the gateway's in-place token save
+# fails ([Errno 30] Read-only file system). Fix: copy the creds JSON to a
+# WRITABLE path and re-point the gateway at the copy so in-session saves work.
 CREDS_SRC="${KIRO_CREDS_FILE:-}"
 CREDS_DIR="/home/kiro/.kiro-hub"
 CREDS_TARGET="${CREDS_DIR}/kiro-auth-token.json"
@@ -79,23 +76,6 @@ if [ -n "$CREDS_SRC" ] && [ -f "$CREDS_SRC" ]; then
     mkdir -p "$CREDS_DIR"
     cp "$CREDS_SRC" "$CREDS_TARGET"
     chmod 600 "$CREDS_TARGET"
-    # If a rotated token was written back to this env var, patch it into the copy
-    # so the freshest token is used after a cold start. Non-fatal on any error.
-    if [ -n "${REFRESH_TOKEN:-}" ]; then
-        REFRESH_TOKEN="$REFRESH_TOKEN" CREDS_TARGET="$CREDS_TARGET" python - <<'PYEOF' || echo "[entrypoint] WARN: could not patch refreshToken into creds copy (using file as-is)"
-import json, os
-p = os.environ["CREDS_TARGET"]
-try:
-    with open(p, "r", encoding="utf-8") as f:
-        data = json.load(f)
-except Exception:
-    data = {}
-data["refreshToken"] = os.environ["REFRESH_TOKEN"]
-with open(p, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2, ensure_ascii=False)
-PYEOF
-        echo "[entrypoint] Patched written-back REFRESH_TOKEN into writable creds copy"
-    fi
     export KIRO_CREDS_FILE="$CREDS_TARGET"
     echo "[entrypoint] Using writable creds copy at $CREDS_TARGET"
 fi
