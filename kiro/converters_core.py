@@ -780,7 +780,7 @@ def convert_documents_to_kiro_format(documents: Optional[List[Dict[str, Any]]]) 
         return []
 
     kiro_docs = []
-    for doc in documents:
+    for idx, doc in enumerate(documents, start=1):
         media_type = doc.get("media_type", "application/pdf")
         data = doc.get("data", "")
 
@@ -791,8 +791,13 @@ def convert_documents_to_kiro_format(documents: Optional[List[Dict[str, Any]]]) 
         # Extract format from media_type: "application/pdf" -> "pdf"
         format_str = media_type.split("/")[-1] if "/" in media_type else media_type
 
+        # Kiro requires a non-empty `name` on each document block; omitting it
+        # makes the API reject the whole request as REQUEST_BODY_INVALID.
+        # The name must be safe (letters/digits/space/hyphen, no extension), so
+        # we generate a stable placeholder since callers don't supply a filename.
         kiro_docs.append({
             "format": format_str,
+            "name": f"document-{idx}",
             "source": {
                 "bytes": data
             }
